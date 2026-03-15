@@ -7,7 +7,7 @@ Send an `.html` file or `.zip` archive to the bot — get a live HTTPS link in s
 ## Features
 
 - **Instant hosting** — send a file, get a link
-- **Wildcard subdomains** — each user gets a personal subdomain: `username.drop2host.ru`
+- **Wildcard subdomains** — each user gets a personal subdomain: `username.yourdomain.com`
 - **ZIP support** — upload multi-file sites (HTML + CSS + JS + images)
 - **Cyrillic transliteration** — type project names in Russian, auto-converted to Latin
 - **Auto-cleanup** — projects expire after 90 days with renewal notifications
@@ -18,7 +18,7 @@ Send an `.html` file or `.zip` archive to the bot — get a live HTTPS link in s
 ## URL Structure
 
 ```
-https://{username}.drop2host.ru/{project-name}/
+https://{username}.yourdomain.com/{project-name}/
 ```
 
 ## Commands
@@ -41,7 +41,7 @@ https://{username}.drop2host.ru/{project-name}/
 ### 1. Setup VPS
 
 ```bash
-sudo bash setup_server.sh drop2host.ru YOUR_CLOUDFLARE_API_TOKEN
+sudo bash setup_server.sh yourdomain.com YOUR_CLOUDFLARE_API_TOKEN
 ```
 
 This installs nginx, obtains wildcard SSL, and creates a systemd service.
@@ -99,6 +99,45 @@ sudo systemctl status html-bot
 ├── requirements.txt
 └── .env.example
 ```
+
+---
+
+## RU | Описание на русском
+
+Telegram-бот для мгновенного хостинга HTML-страниц на вашем VPS с HTTPS.
+
+Отправьте `.html` файл или `.zip` архив боту — получите рабочую HTTPS-ссылку за секунды.
+
+### Возможности
+
+- **Мгновенный хостинг** — отправил файл, получил ссылку
+- **Поддомены** — каждый пользователь получает свой поддомен: `username.yourdomain.com`
+- **ZIP-архивы** — загружайте многостраничные сайты (HTML + CSS + JS + картинки)
+- **Транслитерация** — вводите названия на русском, автоматически переводятся в латиницу
+- **Автоочистка** — проекты удаляются через 90 дней с уведомлением и возможностью продлить
+- **Изоляция** — каждый пользователь видит только свои проекты
+- **Админ-панель** — `/admin` показывает все проекты всех пользователей
+- **Контроль доступа** — whitelist по Telegram ID
+
+### Быстрый старт
+
+1. Подготовьте VPS (Ubuntu 22.04+) и домен с DNS на Cloudflare
+2. Получите токен бота у [@BotFather](https://t.me/BotFather)
+3. Запустите скрипт настройки:
+   ```bash
+   sudo bash setup_server.sh yourdomain.com CLOUDFLARE_API_TOKEN
+   ```
+4. Скопируйте файлы бота в `/opt/html-bot/`, создайте `.env`
+5. Запустите: `sudo systemctl start html-bot`
+
+### Команды бота
+
+| Команда | Описание |
+|---------|----------|
+| `/start` | Регистрация и выбор поддомена |
+| `/list` | Список ваших проектов с URL и сроком |
+| `/delete <имя>` | Удалить проект |
+| `/admin` | (Только админ) Все проекты всех пользователей |
 
 ## License
 

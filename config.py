@@ -7,17 +7,17 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 DOMAIN = os.getenv("DOMAIN", "drop2host.ru")
 
-ALLOWED_USERS = [
+ALLOWED_USERS = set(
     int(uid.strip())
     for uid in os.getenv("ALLOWED_USERS", "").split(",")
     if uid.strip().isdigit()
-]
+)
 
-ADMIN_USERS = [
+ADMIN_USERS = set(
     int(uid.strip())
     for uid in os.getenv("ADMIN_USERS", "").split(",")
     if uid.strip().isdigit()
-]
+)
 
 SITES_DIR = Path(os.getenv("SITES_DIR", "/var/www/sites"))
 DB_PATH = os.getenv("DB_PATH", "./bot.db")

@@ -48,6 +48,8 @@ def save_zip_archive(username: str, slug: str, zip_data: bytes):
 
         # If archive contains a single top-level directory, move its contents up
         _flatten_single_dir(project_dir)
+        # If no index.html but there's a single .html file, rename it
+        _ensure_index_html(project_dir)
     finally:
         os.unlink(tmp_path)
 
@@ -60,6 +62,16 @@ def _flatten_single_dir(project_dir: Path):
         for item in inner_dir.iterdir():
             shutil.move(str(item), str(project_dir / item.name))
         inner_dir.rmdir()
+
+
+def _ensure_index_html(project_dir: Path):
+    """If no index.html exists but there's a single .html file, rename it to index.html."""
+    index = project_dir / "index.html"
+    if index.exists():
+        return
+    html_files = list(project_dir.glob("*.html")) + list(project_dir.glob("*.htm"))
+    if len(html_files) == 1:
+        html_files[0].rename(index)
 
 
 def delete_project_files(username: str, slug: str):

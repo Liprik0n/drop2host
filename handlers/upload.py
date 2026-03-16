@@ -18,6 +18,7 @@ router = Router()
 class Upload(StatesGroup):
     waiting_for_project_name = State()
     waiting_for_overwrite_confirm = State()
+    waiting_for_description = State()
 
 
 def _get_file_ext(filename: str) -> str:
@@ -65,6 +66,7 @@ async def handle_document(message: Message, state: FSMContext, bot: Bot):
         file_ext=ext,
         original_filename=doc.file_name,
         username=user["username"],
+        user_id=user_id,
     )
 
     # Check if caption has project name
@@ -72,7 +74,8 @@ async def handle_document(message: Message, state: FSMContext, bot: Bot):
         raw_name = message.caption.strip()
         if raw_name.lower() == "auto":
             slug = generate_random_slug()
-            await _save_project(message, state, slug, raw_name)
+            await state.update_data(pending_slug=slug, pending_original=raw_name)
+            await _ask_description(message, state)
             return
         slug = transliterate(raw_name)
         error = validate_slug(slug, SLUG_MIN_LENGTH, SLUG_MAX_LENGTH)
@@ -83,7 +86,7 @@ async def handle_document(message: Message, state: FSMContext, bot: Bot):
                 await _ask_overwrite(message, slug)
                 await state.set_state(Upload.waiting_for_overwrite_confirm)
                 return
-            await _save_project(message, state, slug, raw_name)
+            await _ask_description(message, state)
             return
 
     await message.answer(
@@ -106,7 +109,8 @@ async def process_project_name(message: Message, state: FSMContext):
 
     if raw_name.lower() == "auto":
         slug = generate_random_slug()
-        await _save_project(message, state, slug, raw_name)
+        await state.update_data(pending_slug=slug, pending_original=raw_name)
+        await _ask_description(message, state)
         return
 
     slug = transliterate(raw_name)
@@ -128,7 +132,8 @@ async def process_project_name(message: Message, state: FSMContext):
         await state.set_state(Upload.waiting_for_overwrite_confirm)
         return
 
-    await _save_project(message, state, slug, raw_name)
+    await state.update_data(pending_slug=slug, pending_original=raw_name)
+    await _ask_description(message, state)
 
 
 async def _ask_overwrite(message: Message, slug: str):
@@ -154,23 +159,15 @@ async def callback_overwrite(callback: CallbackQuery, state: FSMContext):
         await state.clear()
         return
 
-    username = data["username"]
-    original = data.get("pending_original", slug)
-
-    # Save files
-    if data["file_ext"] == ".zip":
-        save_zip_archive(username, slug, data["file_content"])
-    else:
-        save_html_file(username, slug, data["file_content"])
-
-    await db.update_project(callback.from_user.id, slug, original)
-    await state.clear()
-
-    url = f"https://{username}.{DOMAIN}/{slug}/"
+    await state.update_data(pending_slug=slug, is_overwrite=True)
     await callback.message.edit_text(
-        f"✅ Проект <b>{slug}</b> перезаписан!\n\n🔗 {url}",
+        "Добавьте описание проекта (необязательно):",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Пропустить", callback_data="skip_description")]
+        ]),
         parse_mode="HTML",
     )
+    await state.set_state(Upload.waiting_for_description)
     await callback.answer()
 
 
@@ -184,7 +181,75 @@ async def callback_new_name(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-async def _save_project(message: Message, state: FSMContext, slug: str, original_name: str):
+async def _ask_description(message: Message, state: FSMContext):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Пропустить", callback_data="skip_description")]
+    ])
+    await message.answer(
+        "Добавьте описание проекта (необязательно):",
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+    await state.set_state(Upload.waiting_for_description)
+
+
+@router.message(Upload.waiting_for_description)
+async def process_description(message: Message, state: FSMContext):
+    data = await state.get_data()
+    if not data.get("file_content"):
+        await message.answer("Файл не найден, отправьте заново.")
+        await state.clear()
+        return
+
+    description = message.text.strip()[:200] if message.text else None
+    slug = data["pending_slug"]
+    original = data.get("pending_original", slug)
+
+    if data.get("is_overwrite"):
+        await _save_overwrite(message, state, slug, original, description)
+    else:
+        await _save_project(message, state, slug, original, description)
+
+
+@router.callback_query(F.data == "skip_description")
+async def callback_skip_description(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    if not data.get("file_content"):
+        await callback.answer("Файл не найден, отправьте заново.")
+        await state.clear()
+        return
+
+    slug = data["pending_slug"]
+    original = data.get("pending_original", slug)
+
+    if data.get("is_overwrite"):
+        await _save_overwrite(callback.message, state, slug, original, None)
+    else:
+        await _save_project(callback.message, state, slug, original, None)
+    await callback.answer()
+
+
+async def _save_overwrite(message: Message, state: FSMContext, slug: str, original_name: str, description: str | None):
+    data = await state.get_data()
+    username = data["username"]
+
+    if data["file_ext"] == ".zip":
+        save_zip_archive(username, slug, data["file_content"])
+    else:
+        save_html_file(username, slug, data["file_content"])
+
+    await db.update_project(data["user_id"], slug, original_name, description)
+    await state.clear()
+
+    url = f"https://{username}.{DOMAIN}/{slug}/"
+    desc_line = f"\n📝 {description}" if description else ""
+    await message.answer(
+        f"✅ Проект <b>{slug}</b> перезаписан!{desc_line}\n\n🔗 {url}",
+        parse_mode="HTML",
+    )
+
+
+async def _save_project(message: Message, state: FSMContext, slug: str, original_name: str, description: str | None = None):
     data = await state.get_data()
     username = data["username"]
 
@@ -198,11 +263,12 @@ async def _save_project(message: Message, state: FSMContext, slug: str, original
     else:
         save_html_file(username, slug, data["file_content"])
 
-    await db.create_project(message.from_user.id, slug, original_name)
+    await db.create_project(data["user_id"], slug, original_name, description)
     await state.clear()
 
     url = f"https://{username}.{DOMAIN}/{slug}/"
+    desc_line = f"\n📝 {description}" if description else ""
     await message.answer(
-        f"✅ Проект <b>{slug}</b> размещён!\n\n🔗 {url}",
+        f"✅ Проект <b>{slug}</b> размещён!{desc_line}\n\n🔗 {url}",
         parse_mode="HTML",
     )

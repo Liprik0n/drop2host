@@ -19,6 +19,7 @@ async def init_db():
                 user_id INTEGER NOT NULL,
                 slug TEXT NOT NULL,
                 original_name TEXT,
+                description TEXT DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 expires_at DATETIME NOT NULL,
                 notified BOOLEAN DEFAULT 0,
@@ -26,6 +27,11 @@ async def init_db():
                 UNIQUE(user_id, slug)
             )
         """)
+        # Migration: add description column to existing databases
+        try:
+            await db.execute("ALTER TABLE projects ADD COLUMN description TEXT DEFAULT NULL")
+        except Exception:
+            pass  # Column already exists
         await db.commit()
 
 
@@ -101,12 +107,12 @@ async def get_all_projects() -> list[dict]:
         return [dict(r) for r in rows]
 
 
-async def create_project(user_id: int, slug: str, original_name: str) -> dict:
+async def create_project(user_id: int, slug: str, original_name: str, description: str = None) -> dict:
     expires_at = datetime.utcnow() + timedelta(days=PROJECT_TTL_DAYS)
     async with _conn() as db:
         cursor = await db.execute(
-            "INSERT INTO projects (user_id, slug, original_name, expires_at) VALUES (?, ?, ?, ?)",
-            (user_id, slug, original_name, expires_at.isoformat()),
+            "INSERT INTO projects (user_id, slug, original_name, description, expires_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, slug, original_name, description, expires_at.isoformat()),
         )
         await db.commit()
         db.row_factory = aiosqlite.Row
@@ -115,16 +121,16 @@ async def create_project(user_id: int, slug: str, original_name: str) -> dict:
         return dict(row)
 
 
-async def update_project(user_id: int, slug: str, original_name: str) -> dict:
+async def update_project(user_id: int, slug: str, original_name: str, description: str = None) -> dict:
     """Update existing project (overwrite): reset dates."""
     expires_at = datetime.utcnow() + timedelta(days=PROJECT_TTL_DAYS)
     now = datetime.utcnow().isoformat()
     async with _conn() as db:
         await db.execute(
             """UPDATE projects
-               SET original_name = ?, created_at = ?, expires_at = ?, notified = 0
+               SET original_name = ?, description = ?, created_at = ?, expires_at = ?, notified = 0
                WHERE user_id = ? AND slug = ?""",
-            (original_name, now, expires_at.isoformat(), user_id, slug),
+            (original_name, description, now, expires_at.isoformat(), user_id, slug),
         )
         await db.commit()
         db.row_factory = aiosqlite.Row

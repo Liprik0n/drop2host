@@ -39,8 +39,9 @@ async def cmd_list(message: Message):
             ]
         ])
 
+        desc_line = f"\n📝 {p['description']}" if p.get('description') else ""
         await message.answer(
-            f"<b>{p['slug']}</b>\n"
+            f"<b>{p['slug']}</b>{desc_line}\n"
             f"🔗 {url}\n"
             f"⏳ Осталось: {days_left} дн.",
             parse_mode="HTML",

@@ -27,18 +27,26 @@ async def cmd_list(message: Message):
         await message.answer("У вас пока нет проектов. Отправьте HTML или ZIP файл.")
         return
 
-    lines = ["<b>Ваши проекты:</b>\n"]
     for p in projects:
         url = f"https://{user['username']}.{DOMAIN}/{p['slug']}/"
         expires = datetime.fromisoformat(p["expires_at"])
         days_left = (expires - datetime.utcnow()).days
-        lines.append(
-            f"• <b>{p['slug']}</b>\n"
-            f"  🔗 {url}\n"
-            f"  ⏳ Осталось: {days_left} дн."
-        )
 
-    await message.answer("\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Открыть", url=url),
+                InlineKeyboardButton(text="Удалить", callback_data=f"ask_delete:{p['slug']}"),
+            ]
+        ])
+
+        await message.answer(
+            f"<b>{p['slug']}</b>\n"
+            f"🔗 {url}\n"
+            f"⏳ Осталось: {days_left} дн.",
+            parse_mode="HTML",
+            reply_markup=keyboard,
+            disable_web_page_preview=True,
+        )
 
 
 @router.message(Command("delete"))
@@ -54,7 +62,7 @@ async def cmd_delete(message: Message):
 
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer("Использование: /delete <имя-проекта>")
+        await message.answer("Использование: /delete <имя-проекта>\n\nИли нажмите «Мои проекты» и используйте кнопку «Удалить».")
         return
 
     slug = parts[1].strip()
@@ -74,6 +82,23 @@ async def cmd_delete(message: Message):
         reply_markup=keyboard,
         parse_mode="HTML",
     )
+
+
+@router.callback_query(F.data.startswith("ask_delete:"))
+async def callback_ask_delete(callback: CallbackQuery):
+    slug = callback.data.split(":", 1)[1]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Да, удалить", callback_data=f"confirm_delete:{slug}"),
+            InlineKeyboardButton(text="Отмена", callback_data="cancel_delete"),
+        ]
+    ])
+    await callback.message.edit_text(
+        f"Удалить проект <b>{slug}</b>? Это действие необратимо.",
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("confirm_delete:"))

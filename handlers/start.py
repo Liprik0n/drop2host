@@ -17,6 +17,15 @@ MENU_KEYBOARD = ReplyKeyboardMarkup(
     resize_keyboard=True,
 )
 
+HELP_TEXT = (
+    "<b>Как пользоваться ботом:</b>\n\n"
+    "1. Отправьте <b>.html</b> файл или <b>.zip</b> архив\n"
+    "2. Введите имя проекта (или <b>auto</b> для случайного)\n"
+    "3. Получите готовую HTTPS-ссылку\n\n"
+    "Максимальный размер файла: <b>30 МБ</b>\n"
+    "Проекты хранятся <b>90 дней</b>, за неделю до удаления придёт напоминание."
+)
+
 
 class Registration(StatesGroup):
     waiting_for_subdomain = State()
@@ -34,14 +43,17 @@ async def cmd_start(message: Message, state: FSMContext):
     if user:
         await message.answer(
             f"Привет! Ваш поддомен: <b>{user['username']}.{DOMAIN}</b>\n\n"
-            "Отправьте HTML-файл или ZIP-архив — я размещу его и дам ссылку.",
+            "Отправьте HTML-файл или ZIP-архив — я размещу его и дам ссылку.\n\n"
+            f"{HELP_TEXT}",
             parse_mode="HTML",
             reply_markup=MENU_KEYBOARD,
         )
         return
 
     await message.answer(
-        f"Добро пожаловать! Придумайте имя для вашего поддомена.\n"
+        f"Добро пожаловать!\n\n"
+        f"{HELP_TEXT}\n\n"
+        f"Для начала придумайте имя для вашего поддомена.\n"
         f"Оно станет частью URL: <b>ваше-имя.{DOMAIN}</b>\n\n"
         f"Можно вводить на русском — будет транслитерировано.\n"
         f"Длина: {SLUG_MIN_LENGTH}-{SLUG_MAX_LENGTH} символов.",
@@ -98,17 +110,4 @@ async def btn_help(message: Message):
     if user_id not in ALLOWED_USERS:
         return
 
-    await message.answer(
-        "<b>Как пользоваться ботом:</b>\n\n"
-        "1. Отправьте <b>.html</b> файл или <b>.zip</b> архив\n"
-        "2. Введите имя проекта (или <b>auto</b> для случайного)\n"
-        "3. Получите готовую ссылку\n\n"
-        "<b>Кнопки:</b>\n"
-        "• <b>Мои проекты</b> — список ваших страниц со ссылками\n\n"
-        "<b>Команды:</b>\n"
-        "/delete <i>имя</i> — удалить проект\n"
-        "/admin — панель администратора\n\n"
-        "Максимальный размер файла: <b>30 МБ</b>\n"
-        "Проекты хранятся <b>90 дней</b>, за неделю до удаления придёт напоминание.",
-        parse_mode="HTML",
-    )
+    await message.answer(HELP_TEXT, parse_mode="HTML")

@@ -7,7 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 import database as db
-from config import BOT_TOKEN
+from config import BOT_TOKEN, ALLOWED_USERS
 from handlers import start, upload, manage, admin
 from services.scheduler import check_expiring_projects, cleanup_expired_projects
 
@@ -24,6 +24,10 @@ async def main():
         return
 
     await db.init_db()
+
+    # Load allowed users from DB (merge with .env)
+    db_users = await db.get_all_allowed_users()
+    ALLOWED_USERS.update(db_users)
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=None))
     dp = Dispatcher()

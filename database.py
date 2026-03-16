@@ -27,6 +27,12 @@ async def init_db():
                 UNIQUE(user_id, slug)
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS allowed_users (
+                telegram_id INTEGER PRIMARY KEY,
+                added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         # Migration: add description column to existing databases
         try:
             await db.execute("ALTER TABLE projects ADD COLUMN description TEXT DEFAULT NULL")
@@ -66,6 +72,33 @@ async def create_user(telegram_id: int, username: str, is_admin: bool = False):
         await db.execute(
             "INSERT INTO users (telegram_id, username, is_admin) VALUES (?, ?, ?)",
             (telegram_id, username, is_admin),
+        )
+        await db.commit()
+
+
+# ── Allowed Users ──
+
+async def get_all_allowed_users() -> set[int]:
+    async with _conn() as db:
+        cursor = await db.execute("SELECT telegram_id FROM allowed_users")
+        rows = await cursor.fetchall()
+        return {row[0] for row in rows}
+
+
+async def add_allowed_user(telegram_id: int):
+    async with _conn() as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO allowed_users (telegram_id) VALUES (?)",
+            (telegram_id,),
+        )
+        await db.commit()
+
+
+async def remove_allowed_user(telegram_id: int):
+    async with _conn() as db:
+        await db.execute(
+            "DELETE FROM allowed_users WHERE telegram_id = ?",
+            (telegram_id,),
         )
         await db.commit()
 

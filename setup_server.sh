@@ -38,6 +38,17 @@ certbot certonly \
 echo "=== Creating sites directory ==="
 mkdir -p "${SITES_DIR}"
 
+echo "=== Configuring Nginx gzip compression ==="
+cat > /etc/nginx/conf.d/gzip.conf <<GZIP
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_min_length 256;
+gzip_types text/plain text/css application/json application/javascript
+           text/xml application/xml application/xml+rss text/javascript
+           application/wasm image/svg+xml font/woff2;
+GZIP
+
 echo "=== Configuring Nginx ==="
 cat > /etc/nginx/sites-available/html-hosting <<NGINX
 # HTTP → HTTPS redirect
@@ -87,10 +98,16 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
+    # CORS headers
+    add_header Access-Control-Allow-Origin "*" always;
+    add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "DNT, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type, Range, Authorization" always;
+
     # Cache static assets
-    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot|otf|webp|avif|mp4|webm|ogg|mp3|wav|json|xml|wasm|map|mjs)$ {
         expires 7d;
         add_header Cache-Control "public, immutable";
+        add_header Access-Control-Allow-Origin "*";
     }
 }
 NGINX

@@ -25,7 +25,7 @@ DB_PATH = os.getenv("DB_PATH", "./bot.db")
 PROJECT_TTL_DAYS = int(os.getenv("PROJECT_TTL_DAYS", "90"))
 NOTIFY_BEFORE_DAYS = int(os.getenv("NOTIFY_BEFORE_DAYS", "7"))
 
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB (Telegram limit)
+MAX_FILE_SIZE = 30 * 1024 * 1024  # 30 MB
 ALLOWED_EXTENSIONS = {".html", ".htm", ".zip"}
 SLUG_MIN_LENGTH = 3
 SLUG_MAX_LENGTH = 30

@@ -2,13 +2,20 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 import database as db
 from config import ALLOWED_USERS, ADMIN_USERS, DOMAIN, SLUG_MIN_LENGTH, SLUG_MAX_LENGTH
 from services.transliterate import transliterate, validate_slug
 
 router = Router()
+
+MENU_KEYBOARD = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Мои проекты"), KeyboardButton(text="Помощь")],
+    ],
+    resize_keyboard=True,
+)
 
 
 class Registration(StatesGroup):
@@ -26,11 +33,10 @@ async def cmd_start(message: Message, state: FSMContext):
     user = await db.get_user(user_id)
     if user:
         await message.answer(
-            f"Привет! Ваш поддомен: {user['username']}.{DOMAIN}\n\n"
-            "Отправьте HTML-файл или ZIP-архив для размещения.\n"
-            "Команды:\n"
-            "/list — список ваших проектов\n"
-            "/delete имя — удалить проект"
+            f"Привет! Ваш поддомен: <b>{user['username']}.{DOMAIN}</b>\n\n"
+            "Отправьте HTML-файл или ZIP-архив — я размещу его и дам ссылку.",
+            parse_mode="HTML",
+            reply_markup=MENU_KEYBOARD,
         )
         return
 
@@ -40,6 +46,7 @@ async def cmd_start(message: Message, state: FSMContext):
         f"Можно вводить на русском — будет транслитерировано.\n"
         f"Длина: {SLUG_MIN_LENGTH}-{SLUG_MAX_LENGTH} символов.",
         parse_mode="HTML",
+        reply_markup=ReplyKeyboardRemove(),
     )
     await state.set_state(Registration.waiting_for_subdomain)
 
@@ -74,5 +81,34 @@ async def process_subdomain(message: Message, state: FSMContext):
     await message.answer(
         f"✅ Ваш поддомен: <b>{slug}.{DOMAIN}</b>\n\n"
         "Теперь отправьте HTML-файл или ZIP-архив для размещения.",
+        parse_mode="HTML",
+        reply_markup=MENU_KEYBOARD,
+    )
+
+
+@router.message(F.text == "Мои проекты")
+async def btn_my_projects(message: Message):
+    from handlers.manage import cmd_list
+    await cmd_list(message)
+
+
+@router.message(F.text == "Помощь")
+async def btn_help(message: Message):
+    user_id = message.from_user.id
+    if user_id not in ALLOWED_USERS:
+        return
+
+    await message.answer(
+        "<b>Как пользоваться ботом:</b>\n\n"
+        "1. Отправьте <b>.html</b> файл или <b>.zip</b> архив\n"
+        "2. Введите имя проекта (или <b>auto</b> для случайного)\n"
+        "3. Получите готовую ссылку\n\n"
+        "<b>Кнопки:</b>\n"
+        "• <b>Мои проекты</b> — список ваших страниц со ссылками\n\n"
+        "<b>Команды:</b>\n"
+        "/delete <i>имя</i> — удалить проект\n"
+        "/admin — панель администратора\n\n"
+        "Максимальный размер файла: <b>30 МБ</b>\n"
+        "Проекты хранятся <b>90 дней</b>, за неделю до удаления придёт напоминание.",
         parse_mode="HTML",
     )

@@ -4,7 +4,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 import database as db
-from config import ALLOWED_USERS, DOMAIN, ALLOWED_EXTENSIONS, SLUG_MIN_LENGTH, SLUG_MAX_LENGTH
+from config import ALLOWED_USERS, DOMAIN, ALLOWED_EXTENSIONS, SLUG_MIN_LENGTH, SLUG_MAX_LENGTH, MAX_FILE_SIZE
 from services.transliterate import transliterate, validate_slug
 from services.file_manager import (
     save_html_file,
@@ -42,6 +42,15 @@ async def handle_document(message: Message, state: FSMContext, bot: Bot):
         await message.answer(
             f"❌ Неподдерживаемый формат: {ext}\n"
             f"Допустимые: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+        return
+
+    if doc.file_size and doc.file_size > MAX_FILE_SIZE:
+        size_mb = doc.file_size / (1024 * 1024)
+        limit_mb = MAX_FILE_SIZE / (1024 * 1024)
+        await message.answer(
+            f"❌ Файл слишком большой: {size_mb:.1f} МБ\n"
+            f"Максимальный размер: {limit_mb:.0f} МБ"
         )
         return
 

@@ -39,8 +39,10 @@ echo "=== Creating sites directory ==="
 mkdir -p "${SITES_DIR}"
 
 echo "=== Configuring Nginx gzip compression ==="
-cat > /etc/nginx/conf.d/gzip.conf <<GZIP
-gzip on;
+# Remove standalone gzip.conf to avoid duplicates with nginx.conf's built-in gzip
+rm -f /etc/nginx/conf.d/gzip.conf
+# Add gzip settings inside the http block via a conf.d snippet (without repeating "gzip on")
+cat > /etc/nginx/conf.d/gzip-extra.conf <<GZIP
 gzip_vary on;
 gzip_proxied any;
 gzip_min_length 256;

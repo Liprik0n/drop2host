@@ -125,6 +125,14 @@ cython_debug/
 # Bot database
 *.db
 
+# Backups (contain bot token + user data — never commit, transfer via scp)
+*.tar.gz
+*.tar
+.env.from-backup
+
+# Old/scratch copies
+/1/
+
 # Claude Code
 .claude/
 

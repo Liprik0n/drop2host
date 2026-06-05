@@ -119,6 +119,7 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
 echo "=== Creating bot user and directory ==="
+# Dedicated unprivileged system user that runs the bot (systemd User=).
 useradd -r -s /bin/false "${BOT_USER}" 2>/dev/null || true
 mkdir -p "${BOT_DIR}"
 
@@ -139,12 +140,21 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=${BOT_USER}
+Group=${BOT_USER}
 WorkingDirectory=${BOT_DIR}
 ExecStart=${BOT_DIR}/venv/bin/python ${BOT_DIR}/bot.py
 Restart=always
 RestartSec=5
+# New files (bot.db, extracted sites) get mode 644 so nginx (www-data) can read them
+UMask=0022
 Environment=PYTHONUNBUFFERED=1
+
+# --- Hardening ---
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+ReadWritePaths=${BOT_DIR} ${SITES_DIR}
 
 [Install]
 WantedBy=multi-user.target
@@ -164,8 +174,17 @@ systemctl enable certbot.timer
 systemctl start certbot.timer
 
 echo "=== Setting permissions ==="
-chown -R root:root "${SITES_DIR}"
-chmod -R 755 "${SITES_DIR}"
+# Bot files: owned by the bot user (it must write bot.db here).
+chown -R "${BOT_USER}:${BOT_USER}" "${BOT_DIR}"
+# Protect the token file if it already exists.
+[ -f "${BOT_DIR}/.env" ] && chmod 600 "${BOT_DIR}/.env"
+
+# Sites: bot user writes, nginx (www-data) reads.
+# Group = www-data + setgid on dirs => files/dirs the bot creates later
+# inherit the www-data group automatically.
+chown -R "${BOT_USER}:www-data" "${SITES_DIR}"
+find "${SITES_DIR}" -type d -exec chmod 2775 {} \;
+find "${SITES_DIR}" -type f -exec chmod 644 {} \;
 
 echo ""
 echo "========================================="

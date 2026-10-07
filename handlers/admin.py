@@ -24,6 +24,20 @@ def _is_admin(user_id: int) -> bool:
     return user_id in ADMIN_USERS
 
 
+def _split_message(lines: list[str], limit: int = 4000) -> list[str]:
+    """Join lines into messages under Telegram's 4096-char cap, never splitting a line
+    (a cut inside <b>...</b> makes Telegram reject the whole message)."""
+    chunks, current = [], ""
+    for line in lines:
+        if current and len(current) + 1 + len(line) > limit:
+            chunks.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    chunks.append(current)
+    return chunks
+
+
 # ── Admin panel with buttons ──
 
 @router.message(Command("admin"))
@@ -74,11 +88,10 @@ async def callback_admin_projects(callback: CallbackQuery):
             f"  ⏳ {days_left} дн."
         )
 
-    text = "\n".join(lines)
-    if len(text) > 4000:
-        await callback.message.edit_text(text[:4000], parse_mode="HTML", disable_web_page_preview=True)
-    else:
-        await callback.message.edit_text(text, parse_mode="HTML", disable_web_page_preview=True)
+    chunks = _split_message(lines)
+    await callback.message.edit_text(chunks[0], parse_mode="HTML", disable_web_page_preview=True)
+    for chunk in chunks[1:]:
+        await callback.message.answer(chunk, parse_mode="HTML", disable_web_page_preview=True)
     await callback.answer()
 
 
@@ -127,7 +140,7 @@ async def process_adduser_input(message: Message, state: FSMContext):
         await state.clear()
         return
 
-    text = message.text.strip()
+    text = (message.text or "").strip()
     if not text.isdigit():
         await message.answer("❌ Введите числовой Telegram ID.")
         return

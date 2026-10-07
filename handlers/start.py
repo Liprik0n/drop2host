@@ -65,6 +65,10 @@ async def cmd_start(message: Message, state: FSMContext):
 
 @router.message(Registration.waiting_for_subdomain)
 async def process_subdomain(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Отправьте имя поддомена текстом.")
+        return
+
     raw_name = message.text.strip()
     slug = transliterate(raw_name)
 

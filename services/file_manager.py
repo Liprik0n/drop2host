@@ -1,10 +1,10 @@
-import os
+import io
 import shutil
 import uuid
 import zipfile
 from pathlib import Path
 
-from config import SITES_DIR
+from config import MAX_UNPACKED_SIZE, SITES_DIR
 
 
 def get_project_dir(username: str, slug: str) -> Path:
@@ -24,34 +24,43 @@ def save_html_file(username: str, slug: str, content: bytes, filename: str = "in
 
 
 def save_zip_archive(username: str, slug: str, zip_data: bytes):
-    """Extract a ZIP archive into the project directory."""
-    project_dir = get_project_dir(username, slug)
-    # Clear existing files if overwriting
-    if project_dir.exists():
-        shutil.rmtree(project_dir)
-    project_dir.mkdir(parents=True, exist_ok=True)
+    """Extract a ZIP archive into the project directory.
 
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-        tmp.write(zip_data)
-        tmp_path = tmp.name
-
+    The archive is fully validated before anything is deleted, so a bad
+    upload never destroys the project it was meant to overwrite.
+    Raises ValueError with a user-facing message.
+    """
     try:
-        with zipfile.ZipFile(tmp_path, "r") as zf:
-            # Security: check for path traversal
-            for member in zf.namelist():
-                member_path = Path(member)
-                if member_path.is_absolute() or ".." in member_path.parts:
-                    raise ValueError(f"Опасный путь в архиве: {member}")
+        zf = zipfile.ZipFile(io.BytesIO(zip_data))
+    except zipfile.BadZipFile:
+        raise ValueError("файл повреждён или это не ZIP-архив")
 
-            zf.extractall(project_dir)
+    with zf:
+        # Security: check for path traversal
+        for member in zf.namelist():
+            member_path = Path(member)
+            if member_path.is_absolute() or ".." in member_path.parts:
+                raise ValueError(f"Опасный путь в архиве: {member}")
 
-        # If archive contains a single top-level directory, move its contents up
-        _flatten_single_dir(project_dir)
-        # If no index.html but there's a single .html file, rename it
-        _ensure_index_html(project_dir)
-    finally:
-        os.unlink(tmp_path)
+        # zipfile never yields more than the declared size, so this sum is reliable
+        unpacked = sum(info.file_size for info in zf.infolist())
+        if unpacked > MAX_UNPACKED_SIZE:
+            raise ValueError(
+                f"после распаковки {unpacked / 1024 / 1024:.0f} МБ, "
+                f"максимум {MAX_UNPACKED_SIZE // 1024 // 1024} МБ"
+            )
+
+        project_dir = get_project_dir(username, slug)
+        # Clear existing files if overwriting
+        if project_dir.exists():
+            shutil.rmtree(project_dir)
+        project_dir.mkdir(parents=True, exist_ok=True)
+        zf.extractall(project_dir)
+
+    # If archive contains a single top-level directory, move its contents up
+    _flatten_single_dir(project_dir)
+    # If no index.html but there's a single .html file, rename it
+    _ensure_index_html(project_dir)
 
 
 def _flatten_single_dir(project_dir: Path):

@@ -105,6 +105,10 @@ async def process_project_name(message: Message, state: FSMContext):
         await state.clear()
         return
 
+    if not message.text:
+        await message.answer("Отправьте имя проекта текстом или <b>auto</b>.", parse_mode="HTML")
+        return
+
     raw_name = message.text.strip()
 
     if raw_name.lower() == "auto":
@@ -234,7 +238,12 @@ async def _save_overwrite(message: Message, state: FSMContext, slug: str, origin
     username = data["username"]
 
     if data["file_ext"] == ".zip":
-        save_zip_archive(username, slug, data["file_content"])
+        try:
+            save_zip_archive(username, slug, data["file_content"])
+        except ValueError as e:
+            await message.answer(f"❌ Ошибка архива: {e}\nСтарая версия проекта сохранена.")
+            await state.clear()
+            return
     else:
         save_html_file(username, slug, data["file_content"])
 

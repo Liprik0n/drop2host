@@ -11,6 +11,7 @@ from aiogram.types import (
 
 import database as db
 from config import ADMIN_USERS, ALLOWED_USERS, DOMAIN
+from services.backup import send_backup
 
 router = Router()
 
@@ -38,6 +39,9 @@ async def cmd_admin(message: Message):
         ],
         [
             InlineKeyboardButton(text="Добавить пользователя", callback_data="admin:adduser"),
+        ],
+        [
+            InlineKeyboardButton(text="Бэкап сейчас", callback_data="admin:backup"),
         ],
     ])
     await message.answer(
@@ -143,6 +147,28 @@ async def process_adduser_input(message: Message, state: FSMContext):
         f"Всего пользователей: {len(ALLOWED_USERS)}",
         parse_mode="HTML",
     )
+
+
+# ── Backup ──
+
+@router.callback_query(F.data == "admin:backup")
+async def callback_admin_backup(callback: CallbackQuery):
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет прав.")
+        return
+
+    await callback.answer("⏳ Собираю бэкап…")
+    await send_backup(callback.bot, [callback.from_user.id])
+
+
+@router.message(Command("backup"))
+async def cmd_backup(message: Message):
+    if not _is_admin(message.from_user.id):
+        await message.answer("⛔ У вас нет прав администратора.")
+        return
+
+    await message.answer("⏳ Собираю бэкап…")
+    await send_backup(message.bot, [message.from_user.id])
 
 
 # ── Remove user (from user list) ──

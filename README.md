@@ -15,6 +15,7 @@ Telegram-бот для мгновенного хостинга HTML-страни
 - **Кнопочный интерфейс** — удобное меню и inline-кнопки, не нужно запоминать команды
 - **Управление пользователями** — добавление/удаление пользователей прямо из Telegram
 - **Админ-панель** — все проекты и пользователи в одном месте
+- **Бэкапы в Telegram** — база и сайты каждый день приходят админу (только при изменениях)
 - **Лимит 30 МБ** — достаточно для любого статического сайта
 - **CORS и gzip** — поддержка современных веб-технологий из коробки
 
@@ -63,6 +64,13 @@ sudo systemctl status html-bot
 | `/adduser <id>` | Добавить пользователя |
 | `/removeuser <id>` | Удалить пользователя |
 | `/users` | Список пользователей |
+| `/backup` | Прислать бэкап прямо сейчас |
+
+## Бэкапы и восстановление
+
+Каждый день в 03:00 UTC (и при запуске) бот присылает администраторам `html-bot-backup.tar.gz` (база + настройки, **без токена**) и `sites-backup.tar.gz` (все сайты). Если с прошлого бэкапа ничего не изменилось, отправка пропускается. Архивы больше 45 МБ приходят частями `.partNN`.
+
+Восстановление на чистом сервере: положите оба архива (или все части) и `restore_server.sh` в `/root/` и выполните `bash /root/restore_server.sh` — скрипт спросит токен бота и Cloudflare-токен.
 
 ## URL Structure
 
@@ -114,8 +122,10 @@ Send an `.html` file or `.zip` archive to the bot — get a live HTTPS link in s
 ├── services/
 │   ├── transliterate.py    # Cyrillic → Latin
 │   ├── file_manager.py     # File saving, ZIP extraction
-│   └── scheduler.py        # 90-day expiry checks
+│   ├── scheduler.py        # 90-day expiry checks
+│   └── backup.py           # Daily backups to admins in Telegram
 ├── setup_server.sh     # VPS setup script
+├── restore_server.sh   # One-shot recovery on a clean server
 ├── requirements.txt
 └── .env.example
 ```

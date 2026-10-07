@@ -10,6 +10,7 @@ import database as db
 from config import BOT_TOKEN, ALLOWED_USERS
 from handlers import start, upload, manage, admin
 from services.scheduler import check_expiring_projects, cleanup_expired_projects
+from services.backup import send_backup
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +51,14 @@ async def main():
         CronTrigger(hour=10, minute=30),
         args=[bot],
     )
+    # Backups to admins: daily at 03:00 UTC and once at startup,
+    # each sent only if something changed since the last one
+    scheduler.add_job(
+        send_backup,
+        CronTrigger(hour=3, minute=0),
+        args=[bot],
+    )
+    scheduler.add_job(send_backup, args=[bot], misfire_grace_time=None)
     scheduler.start()
 
     logger.info("Bot started")

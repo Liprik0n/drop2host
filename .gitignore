@@ -125,6 +125,9 @@ cython_debug/
 # Bot database
 *.db
 
+# Last sent backup fingerprint (services/backup.py)
+backup_state.json
+
 # Backups (contain bot token + user data — never commit, transfer via scp)
 *.tar.gz
 *.tar

@@ -11,8 +11,10 @@ from datetime import datetime
 from pathlib import Path
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramMigrateToChat
 from aiogram.types import FSInputFile
 
+import database as db
 from config import ADMIN_USERS, DB_PATH, SITES_DIR
 
 logger = logging.getLogger(__name__)
@@ -22,6 +24,8 @@ PART_SIZE = 45 * 1024 * 1024
 UPLOAD_TIMEOUT = 600
 ENV_PATH = Path(".env")
 STATE_PATH = Path("backup_state.json")
+# settings key: chat chosen with /backup_here (default: admins' private chats)
+BACKUP_CHAT_KEY = "backup_chat_id"
 
 _lock = asyncio.Lock()
 
@@ -128,17 +132,45 @@ def _save_fingerprint(fingerprint: str):
     }))
 
 
-async def send_backup(bot: Bot, chat_ids: list[int] | None = None) -> bool:
-    """Send the DB and sites archives to admins.
+async def _send_files(bot: Bot, chat_id: int, files: list[Path], caption: str):
+    for i, path in enumerate(files):
+        await bot.send_document(
+            chat_id,
+            FSInputFile(path),
+            caption=caption if i == 0 else None,
+            request_timeout=UPLOAD_TIMEOUT,
+        )
 
-    Scheduled run (chat_ids=None): goes to every admin, skipped if nothing
-    changed since the last sent backup. Manual run: always sent to chat_ids.
+
+async def _send_to_chat(bot: Bot, chat_id: int, files: list[Path], caption: str) -> bool:
+    try:
+        try:
+            await _send_files(bot, chat_id, files, caption)
+        except TelegramMigrateToChat as e:
+            # A group upgraded to a supergroup gets a new id
+            if await db.get_setting(BACKUP_CHAT_KEY) == str(chat_id):
+                await db.set_setting(BACKUP_CHAT_KEY, str(e.migrate_to_chat_id))
+            chat_id = e.migrate_to_chat_id
+            await _send_files(bot, chat_id, files, caption)
+        return True
+    except Exception:
+        logger.exception("Failed to send backup to %s", chat_id)
+        return False
+
+
+async def send_backup(bot: Bot, chat_ids: list[int] | None = None) -> bool:
+    """Send the DB and sites archives.
+
+    Scheduled run (chat_ids=None): goes to the /backup_here chat, or to every
+    admin if none is set or it fails; skipped if nothing changed since the
+    last sent backup. Manual run: always sent to chat_ids.
     """
     scheduled = chat_ids is None
     targets = sorted(ADMIN_USERS) if scheduled else chat_ids
     if not targets:
         logger.warning("Backup skipped: ADMIN_USERS is empty")
         return False
+    backup_chat = await db.get_setting(BACKUP_CHAT_KEY) if scheduled else None
 
     async with _lock:
         with tempfile.TemporaryDirectory() as tmp:
@@ -165,18 +197,16 @@ async def send_backup(bot: Bot, chat_ids: list[int] | None = None) -> bool:
                 )
 
             sent = False
-            for chat_id in targets:
-                try:
-                    for i, path in enumerate(files):
-                        await bot.send_document(
-                            chat_id,
-                            FSInputFile(path),
-                            caption=caption if i == 0 else None,
-                            request_timeout=UPLOAD_TIMEOUT,
-                        )
-                    sent = True
-                except Exception:
-                    logger.exception("Failed to send backup to %s", chat_id)
+            if backup_chat:
+                sent = await _send_to_chat(bot, int(backup_chat), files, caption)
+                if not sent:
+                    caption = (
+                        "⚠️ Не удалось отправить в чат бэкапов — бот всё ещё в нём? "
+                        "Новый чат: /backup_here\n\n" + caption
+                    )
+            if not sent:
+                for chat_id in targets:
+                    sent = await _send_to_chat(bot, chat_id, files, caption) or sent
 
             if sent and scheduled:
                 _save_fingerprint(fingerprint)

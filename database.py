@@ -33,6 +33,12 @@ async def init_db():
                 added_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
         # Migration: add description column to existing databases
         try:
             await db.execute("ALTER TABLE projects ADD COLUMN description TEXT DEFAULT NULL")
@@ -99,6 +105,25 @@ async def remove_allowed_user(telegram_id: int):
         await db.execute(
             "DELETE FROM allowed_users WHERE telegram_id = ?",
             (telegram_id,),
+        )
+        await db.commit()
+
+
+# ── Settings ──
+
+async def get_setting(key: str) -> str | None:
+    async with _conn() as db:
+        cursor = await db.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def set_setting(key: str, value: str):
+    async with _conn() as db:
+        await db.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
         )
         await db.commit()
 

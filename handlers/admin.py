@@ -11,7 +11,7 @@ from aiogram.types import (
 
 import database as db
 from config import ADMIN_USERS, ALLOWED_USERS, DOMAIN
-from services.backup import send_backup
+from services.backup import BACKUP_CHAT_KEY, send_backup
 
 router = Router()
 
@@ -158,7 +158,7 @@ async def callback_admin_backup(callback: CallbackQuery):
         return
 
     await callback.answer("⏳ Собираю бэкап…")
-    await send_backup(callback.bot, [callback.from_user.id])
+    await send_backup(callback.bot, [callback.message.chat.id])
 
 
 @router.message(Command("backup"))
@@ -168,7 +168,20 @@ async def cmd_backup(message: Message):
         return
 
     await message.answer("⏳ Собираю бэкап…")
-    await send_backup(message.bot, [message.from_user.id])
+    await send_backup(message.bot, [message.chat.id])
+
+
+@router.message(Command("backup_here"))
+async def cmd_backup_here(message: Message):
+    if not _is_admin(message.from_user.id):
+        await message.answer("⛔ У вас нет прав администратора.")
+        return
+
+    await db.set_setting(BACKUP_CHAT_KEY, str(message.chat.id))
+    await message.answer(
+        "✅ Ежедневные бэкапы теперь приходят в этот чат.\n"
+        "Вернуть в личку — отправьте /backup_here в личном чате с ботом."
+    )
 
 
 # ── Remove user (from user list) ──
